@@ -1,0 +1,15 @@
+services:
+
+  postgres:
+
+    image: postgres:16
+
+    container_name: idp-postgres
+
+    environment:
+      POSTGRES_DB: idp_user
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5432:5432"

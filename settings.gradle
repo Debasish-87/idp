@@ -1,0 +1,14 @@
+rootProject.name = 'idp'
+
+include(
+        'user-service',
+        'catalog-service',
+        'audit-service',
+        'deployment-service',
+        'api-gateway',
+        'common-lib',
+        'environment-service',
+        'release-service',
+        'github-service',
+        'template-service'
+)

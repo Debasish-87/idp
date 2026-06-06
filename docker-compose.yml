@@ -1,0 +1,216 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: idp-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: idp_user
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  github-service:
+    build: ./github-service
+    container_name: github-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8087:8087"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/idp_user
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_OWNER: ${GITHUB_OWNER}
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8081:8081"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/idp_user
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+  catalog-service:
+    build: ./catalog-service
+    container_name: catalog-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      github-service:
+        condition: service_started
+
+    ports:
+      - "8082:8082"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/idp_user
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      GITHUB_SERVICE_URL: http://github-service:8087
+
+  deployment-service:
+    build: ./deployment-service
+    container_name: deployment-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      catalog-service:
+        condition: service_started
+
+      audit-service:
+        condition: service_started
+
+    ports:
+      - "8083:8083"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/idp_user
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      KUBECONFIG: /root/.kube/config
+
+    volumes:
+      - /home/zenthix/.kube:/root/.kube:ro
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  audit-service:
+    build: ./audit-service
+    container_name: audit-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8084:8084"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/idp_user
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+  environment-service:
+    build: ./environment-service
+    container_name: environment-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8085:8085"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/idp_user
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+  release-service:
+    build: ./release-service
+    container_name: release-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8086:8086"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/idp_user
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+  template-service:
+    build: ./template-service
+    container_name: template-service
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      github-service:
+        condition: service_started
+
+      catalog-service:
+        condition: service_started
+
+    ports:
+      - "8088:8088"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/idp_user
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      GITHUB_SERVICE_URL: http://github-service:8087
+      CATALOG_SERVICE_URL: http://catalog-service:8082
+
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_OWNER: ${GITHUB_OWNER}
+
+    volumes:
+      - ./generated:/app/generated
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    restart: unless-stopped
+
+    depends_on:
+      - user-service
+      - catalog-service
+      - deployment-service
+      - audit-service
+      - environment-service
+      - release-service
+      - template-service
+
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
